@@ -8,14 +8,30 @@ import random
 import wikipedia
 import json
 import pyttsx3
-
 from pyttsx3 import voice
 
+personalInfo = None
+wakeWords = []
 warnings.filterwarnings('ignore')
-#Set up the text to speech voice
+# Set up the text to speech voice
 voiceEngine = pyttsx3.init()
 voices = voiceEngine.getProperty('voices')
 voiceEngine.setProperty('voice', voices[2].id)
+
+
+def validateYesorNo():
+    while True:
+        response = listenToAudio()
+        print(response)
+        if response == "yes":
+            print("answered yes")
+            return True
+        elif response == "no":
+            print("answeered no")
+            return False
+        else:
+            speechResponse("Sorry I didnt quite catch that. Please answer with yes or no ")
+
 
 def listenToAudio():
     r = sr.Recognizer()
@@ -37,6 +53,7 @@ def whatQuestion(data):
     response = ""
     return response
 
+
 def speechResponse(data):
     print("here")
     print(data)
@@ -44,20 +61,19 @@ def speechResponse(data):
     voiceEngine.runAndWait()
 
 
-#this will listen for wake word then will return what was said after the wake word
+# this will listen for wake word then will return what was said after the wake word
 def wakeCommand(data):
-    wake_phrases = ['omega','hey omega']
+    global wakeWords
     data = data.lower()
     command = ""
     iterator = 0
-    for item in wake_phrases:
+    for item in wakeWords:
         if item in data:
             offset = len(item)
             for i in range(iterator + offset, len(data)):
                 command = command + data[i]
-
             return command.lstrip(' ')
-        iterator +=1
+        iterator += 1
     command = ""
     return command
 
@@ -75,13 +91,13 @@ def getDate():
     day = str(day)
     if day == '1' or day == '21' or day == '31':
         amendedNumber = day + "st"
-    elif(day == '2' or day == '22'):
+    elif day == '2' or day == '22':
         amendedNumber = day + "nd"
-    elif(day == '3' or day == '23'):
+    elif day == '3' or day == '23':
         amendedNumber = day + "rd"
     else:
         amendedNumber = day + "th"
-    return "Today is  " + str(weekday)+" "+ str(amendedNumber) + " of " + str(monthData[month - 1] )+ " " + str(year)
+    return "Today is  " + str(weekday) + " " + str(amendedNumber) + " of " + str(monthData[month - 1]) + " " + str(year)
 
 
 def greeting(data):
@@ -93,21 +109,32 @@ def greeting(data):
     return ""
 
 
-
 def pullName(data):
     wordArray = data.split()
     name = ""
     for i in range(0, len(wordArray)):
         if i + 3 <= len(wordArray):
             if wordArray[i].lower() == 'who' and wordArray[i + 1].lower() == 'is':
-                for j in range(i+2, len(wordArray)):
+                for j in range(i + 2, len(wordArray)):
                     name = name + wordArray[j] + " "
             elif wordArray[i] == "who's":
-                for j in range(i+1, len(wordArray)):
+                for j in range(i + 1, len(wordArray)):
                     name = name + wordArray[j] + " "
         return name
 
 
+def helpManager():
+    global personalInfo
+    speechResponse("How may I help you " + personalInfo.getName())
+    speechResponse("Please respond with, change nickname, change assistant name, or display options")
+    correctInput = False
+    while not correctInput:
+        response = listenToAudio()
+
+    # change nickname
+    # change assistant name
+    # display options
+    return False
 
 
 def manageCommandOption(data):
@@ -116,39 +143,94 @@ def manageCommandOption(data):
     if (command[0] == 'who' and command[1] == 'is') or command[0] == "who's":
         name = pullName(data).title()
         name = ''.join(name.split())
-        speakResponse = wikipedia.summary(name, sentences = 2)
+        speakResponse = wikipedia.summary(name, sentences=2)
 
     elif command[0] == "what":
         speakResponse = whatQuestion(data)
+    elif command[0] == 'help':
+        helpManager()
 
-    else: #If the command wasnt understood
+    else:  # If the command wasnt understood
         speakResponse = "Sorry I didnt quite understand that"
     speechResponse(speakResponse)
 
 
 class PersonalInformaion:
     name = ""
-    def __init__(self): #Sets up the configuration files
+    wake_phrases = []
+
+    def __init__(self):  # Sets up the configuration files
         try:
             with open('config_data.json', 'r') as jsonFile:
                 print("here")
                 data = json.load(jsonFile)
-                name = data['name']
+                self.name = data['name']
+                self.wake_phrases = data['wake_phrases']
         except:
-            print("here")
-            speechResponse("What is your name")
-            name = listenToAudio()
-            data = {'name' : name}
+            data = {}
+            self.setName()
+            self.initaliseAssistantName()
+            data['name'] = self.name
+            data['wake_phrases'] = self.wake_phrases
             with open('config_data.json', 'w') as jsonFile:
                 json.dump(data, jsonFile)
-            #Double check right name was recieved
-
-
-        response = "I am Omega, welcome " + name
+        global wakeWords
+        wakeWords = self.wake_phrases
+        response = "I am " + self.wake_phrases[0] + ", welcome " + self.name
         speechResponse(response)
 
+    def setName(self):
+        speechResponse("What shall I call you?")
+        self.name = listenToAudio()
+        print(self.name)
+
+    def initaliseAssistantName(self):
+        keepLoop = True
+        speechResponse("By default I am called Omega, do you wish to change this?")
+        while keepLoop:
+            acceptedYesNo = validateYesorNo()
+            if acceptedYesNo:  # Start process to set custom name
+                self.setAssistantName()
+                keepLoop = False
+            else:
+                self.wake_phrases.append('omega')
+                self.wake_phrases.append('ok omega')
+                keepLoop = False
+
+    def saveJson(self):
+        try:
+            data = {'name': self.name, 'wake_phrases': self.wake_phrases}
+            with open('config_data.json', 'w') as jsonFile:
+                json.dump(data, jsonFile)
+        except:
+            speechResponse("Sorry an error happened saving json file")
+
+    def setAssistantName(self):
+        nameAccepted = False
+        while not nameAccepted:
+            speechResponse("Please say which name you would like to address me as")
+            response = listenToAudio()
+            speechResponse("Do you want to call me " + response + "?")
+            if validateYesorNo():  # Sets custom wake phrases
+                self.wake_phrases.append(response)
+                self.wake_phrases.append('ok ' + response)
+                speechResponse(
+                    "You can now activate me by using " + self.wake_phrases[0] + " and " + self.wake_phrases[1])
+                global wakeWords
+                wakeWords = self.wake_phrases
+                nameAccepted = True
+                self.saveJson()
+            else:
+                speechResponse("I must have misheard you")
+
+    def getName(self):
+        return self.name
+
+
 def main():
-    personInfo = PersonalInformaion()
+    global personalInfo
+    personalInfo = PersonalInformaion()
+
     while (True):
         data = listenToAudio()
         response = ''
@@ -157,16 +239,5 @@ def main():
             manageCommandOption(command)
 
 
-
 if __name__ == "__main__":
     main()
-
-
-
-
-
-
-
-
-
-
