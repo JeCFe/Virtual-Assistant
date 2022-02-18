@@ -1,9 +1,6 @@
 import speech_recognition as sr
-import config
 import os
-import geocoder
-import requests
-import pyowm
+
 import datetime
 import warnings
 import calendar
@@ -11,7 +8,7 @@ import random
 import wikipedia
 import json
 import pyttsx3
-
+from pyttsx3 import voice
 
 personalInfo = None
 wakeWords = []
@@ -19,7 +16,7 @@ warnings.filterwarnings('ignore')
 # Set up the text to speech voice
 voiceEngine = pyttsx3.init()
 voices = voiceEngine.getProperty('voices')
-voiceEngine.setProperty('voice', voices[1].id)
+voiceEngine.setProperty('voice', voices[2].id)
 
 
 def validateYesorNo():
@@ -51,76 +48,14 @@ def listenToAudio():
         print("Request results from google recognition error: " + e)
     return data
 
-# Only returns weather in the current area
-def weatherQuestion(option):
-    apiKey = config.weatherappAPIKey
-    geolocation = geocoder.ip('me')
-    print(geolocation)
-    print(geolocation.lat)
-    lat = geolocation.lat
-    lon = geolocation.lng
-    url = "https://api.openweathermap.org/data/2.5/onecall?lat=%s&lon=%s&exclude=minutely,hourly,alerts&appid=%s&units=metric" % (
-        lat, lon, apiKey)
-    response = requests.get(url)
-    data = json.loads(response.text)
-    print(data)
-    with open('weather.json', 'w') as jsonFile:
-        json.dump(data, jsonFile)
-
-    city = geolocation.city
-
-    if option == "current":
-        temp = str(data["current"]["temp"])
-        currentSpeed = str(data["current"]["wind_speed"])
-        weatherType = str(data["current"]["weather"][0]["description"])
-        speechResponse(
-            "In " + city + " it is currently " + weatherType + " at a temperature of " + temp + " degrees and you can expect wind speeds of up to " + currentSpeed + " kilometers per hour")
-
-    if option == "today":
-        # Todays weather
-        dayTemp = str(data["daily"][0]["temp"]["day"])
-        nightTemp = str(data["daily"][0]["temp"]["night"])
-        morningTemp = str(data["daily"][0]["temp"]["morn"])
-        minTemp = str(data["daily"][0]["temp"]["min"])
-        maxTemp = str(data["daily"][0]["temp"]["max"])
-        dailySpeeds = str(data["daily"][0]["wind_speed"])
-        dailyGusts = str(data["daily"][0]["wind_gust"])
-        dailyWeatherType = str(data["daily"][0]["weather"][0]["description"])
-
-        speechResponse("Today in " + city + " you can expect morning temperatures of "
-                       + morningTemp + " degrees with day temperatures of " + dayTemp + " degrees and night temperatures of " + nightTemp + " degrees. " +
-                       "Throughout the day you can expect a low of " + minTemp + " degrees and a max of " + maxTemp + " degrees. Wind speeds can be expected to reach " +
-                       dailySpeeds + " kilometers per hour, with gusts reaching " + dailyGusts + " kilometers per hour. Today you can expect " + dailyWeatherType)
-
 
 def whatQuestion(data):
-    acceptedCommands = ['current weather', 'weather']
-    commandToUse = None
-    for item in acceptedCommands:
-        if item in data:
-            commandToUse = item
-            break
-    if commandToUse == None:
-        speechResponse("Sorry I either didn't understand you, or I currently cannot do that task")
-    print(commandToUse)
-
-    if commandToUse == acceptedCommands[0]:
-        weatherQuestion("current")
-    elif commandToUse == acceptedCommands[1]:
-        weatherQuestion("today")
-
-    # what is the time
-    # waht is the date
-    # what is the weather
-    # what is the current weather
-    # what is love
-    #
-
     response = ""
     return response
 
 
 def speechResponse(data):
+    print("here")
     print(data)
     voiceEngine.say(data)
     voiceEngine.runAndWait()
@@ -191,30 +126,19 @@ def pullName(data):
 def helpManager():
     global personalInfo
     speechResponse("How may I help you " + personalInfo.getName())
-    speechResponse("Please respond with, change nickname, change assistant name, or list commands")
+    speechResponse("Please respond with, change nickname, change assistant name, or display options")
     correctInput = False
     while not correctInput:
         response = listenToAudio()
-        if response == "change nickname":
-            personalInfo.setName()
-            correctInput = True
-        elif response == "change assistant name":
-            personalInfo.setAssistantName()
-            correctInput = True
-        elif response == "list commands":
-            speechResponse("I can currently understand the following.")
-            speechResponse("Who is named person.")
-            speechResponse("What is. This can be used to find the current date and time. More to come")
-            # Add future commands options here
-            correctInput = True
-        else:
-            speechResponse("Sorry I didn't quite catch that")
+
+    # change nickname
+    # change assistant name
+    # display options
     return False
 
 
 def manageCommandOption(data):
     command = data.split()
-    print(command)
     speakResponse = ""
     if (command[0] == 'who' and command[1] == 'is') or command[0] == "who's":
         name = pullName(data).title()
@@ -238,32 +162,27 @@ class PersonalInformaion:
     def __init__(self):  # Sets up the configuration files
         try:
             with open('config_data.json', 'r') as jsonFile:
+                print("here")
                 data = json.load(jsonFile)
                 self.name = data['name']
                 self.wake_phrases = data['wake_phrases']
         except:
-            self.setName(True)
+            data = {}
+            self.setName()
             self.initaliseAssistantName()
-            self.saveJson()
+            data['name'] = self.name
+            data['wake_phrases'] = self.wake_phrases
+            with open('config_data.json', 'w') as jsonFile:
+                json.dump(data, jsonFile)
         global wakeWords
         wakeWords = self.wake_phrases
         response = "I am " + self.wake_phrases[0] + ", welcome " + self.name
         speechResponse(response)
 
-    def setName(self, init=False):
-        acceptedName = False
+    def setName(self):
         speechResponse("What shall I call you?")
-        while not acceptedName:
-            self.name = listenToAudio()
-            speechResponse("Do you want me to call you " + self.name)
-            if not validateYesorNo():
-                speechResponse("Sorry I must have misheard you")
-                self.name = ""
-            else:
-                speechResponse("Okay, I'll call you " + self.name + " from now on")
-                acceptedName = True
-        if not init:
-            self.saveJson()
+        self.name = listenToAudio()
+        print(self.name)
 
     def initaliseAssistantName(self):
         keepLoop = True
@@ -316,7 +235,6 @@ def main():
         data = listenToAudio()
         response = ''
         command = wakeCommand(data)
-        print(command)
         if (command != ""):  # We know there has been a command given
             manageCommandOption(command)
 
